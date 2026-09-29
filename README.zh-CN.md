@@ -1,7 +1,7 @@
 # 杀戮尖塔2分层智能体
 [English](README.md)
 
-这是一个用于**《杀戮尖塔2》**的分层智能体实验项目：战斗中由 MaskablePPO 选择出牌、目标、药水和结束回合动作；地图、商店、事件、篝火和奖励选择由兼容 Qwen 的战略智能体处理。游戏通过 [STS2 MCP](https://github.com/Gennadiyev/STS2MCP) 暴露的本地 HTTP API 控制。
+这是一个用于《杀戮尖塔2》的分层智能体实验项目：战斗中由 MaskablePPO 选择出牌、目标、药水和结束回合动作；地图、商店、事件、篝火和奖励选择由兼容 Qwen 的战略智能体处理。游戏通过 [STS2 MCP](https://github.com/Gennadiyev/STS2MCP) 暴露的本地 HTTP API 控制。
 
 本项目仍是研究原型。PPO 与战略智能体的协作链路已经集成，但尚不能保证稳定通关。
 
