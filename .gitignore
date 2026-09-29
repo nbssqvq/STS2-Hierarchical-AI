@@ -30,11 +30,11 @@ events.out.tfevents.*
 episode.monitor.csv
 progress.csv
 
-# Ignore C# files by default. Keep the MCP source and the release helper mod.
+# C# MCP source at the repository root is a local reverse-engineering reference.
+# Only the deployable MCP DLL and manifest are published.
 *.cs
-!/McpMod*.cs
-!/mods/McpBuild/McpMod.Multiplayer*.cs
 !/mods/PunchOffInstantFix/Patch.cs
+/mods/McpBuild/*.csproj
 /mods/PunchOffInstantFix/Probe.cs
 /mods/PunchOffInstantFix/probe-request.txt
 
@@ -46,6 +46,18 @@ progress.csv
 /mods/PunchOffInstantFix/bin/Release/net9.0/*
 !/mods/PunchOffInstantFix/bin/Release/net9.0/PunchOffInstantFix.dll
 **/obj/
+
+# Curated, versioned inference artifacts live outside the ignored local models/ tree.
+/artifacts/models/**
+!/artifacts/models/ppo_800k/
+!/artifacts/models/ppo_800k/final_model.zip
+!/artifacts/models/ppo_800k/final_model.mappings.json
+!/artifacts/models/qwen3_4b_lora/
+!/artifacts/models/qwen3_4b_lora/adapter_model.safetensors
+!/artifacts/models/qwen3_4b_lora/adapter_config.json
+!/artifacts/models/qwen3_4b_lora/tokenizer.json
+!/artifacts/models/qwen3_4b_lora/tokenizer_config.json
+!/artifacts/models/qwen3_4b_lora/chat_template.jinja
 
 # Game decompilation and inspection output
 /tools/inspect_game/

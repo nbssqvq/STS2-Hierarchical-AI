@@ -1,128 +1,124 @@
 # Slay the Spire 2 Hierarchical AI
 [简体中文](README.zh-CN.md)
 
-An experimental hierarchical agent for **Slay the Spire 2**. It combines a MaskablePPO tactical policy for combat with a Qwen-based strategic agent for route, shop, event, rest-site, and reward decisions. The game is controlled through the local HTTP API exposed by [STS2 MCP](https://github.com/Gennadiyev/STS2MCP).
+An experimental hierarchical agent for **Slay the Spire 2**. A MaskablePPO policy chooses combat actions, while a Qwen-compatible strategic agent handles routes, shops, events, rest sites, and reward choices. The game is controlled through the local HTTP API exposed by [STS2 MCP](https://github.com/Gennadiyev/STS2MCP).
 
-This is a research prototype. The intended outcome is to let the tactical policy focus on combat while the strategic agent handles longer-horizon choices, then improve both from collected runs. These are goals, not a claim of reliable wins or a completed solver.
+This is a research prototype. PPO and the strategic model are integrated, but consistent full-run wins are not guaranteed.
 
-## Project overview
+## Project layout
 
-- **Combat:** MaskablePPO selects cards, targets, potions, and end-turn actions. The current observation schema is 4 (216 features), with a 128×128 MLP policy. Dynamic card, status, and entity mappings are stored beside checkpoints.
-- **Strategy:** A Qwen 3 4B-compatible service handles meaningful non-combat decisions and combat-related selection screens. A deterministic fallback and a rule guard validate decisions.
-- **Shared game flow:** Training and single-run evaluation use the same environment and `GameRunner` for automatic non-combat progression.
-- **Learning workflow:** PPO training, checkpoint migration, run evaluation, strategic trajectory collection, dataset curation, and optional LoRA fine-tuning are provided as separate scripts.
+```text
+sts2_rl/
+  runtime/       Environment, features, masks, MCP client, PPO adapter, game runner
+  strategy/      Strategic policy, routing rules, Ollama client, LoRA server
+  training/      PPO/LoRA training and dataset tools
+  evaluation/    PPO and LoRA evaluation and run analysis
+  config.py      Project-root and default model paths
+tools/           Manual HTTP interaction utility
+mods/            Deployable STS2 MCP and training helper mods
+artifacts/models/Curated 800k PPO checkpoint and Qwen strategic LoRA inference bundle
+logs/, models/   Local logs, datasets, model caches, and training checkpoints; ignored by Git
+```
 
-## Current stage
+The repository-root `.cs` files are local reference sources and are deliberately excluded from Git. The modified MCP release DLL and manifest are retained under `mods/McpBuild`; the public checkout does not contain the root MCP source needed to rebuild that binary. The separate `PunchOffInstantFix` helper mod retains its source and release files.
 
-The project has an integrated PPO + strategic-LLM loop and working PPO/LoRA training and evaluation workflows. The local PPO run has reached roughly 800k environment steps; the checkpoint, LoRA adapter, datasets, and run logs are local artifacts and are not included in this repository. The current work is still focused on evaluating decisions, improving data quality, and making long runs more reliable. Full-run completion and stable win rates are not yet guaranteed.
+## Current stage and included models
+
+The hierarchical PPO + strategic-agent loop is integrated. The included PPO artifact is the latest available checkpoint at **800,902 environment steps**. Its mapping JSON is required alongside the ZIP file for correct feature encoding. The included Qwen3-4B LoRA package contains the adapter and tokenizer files needed for inference; it does not contain optimizer/trainer state, so it cannot resume LoRA fine-tuning by itself.
+
+The Qwen base model is not included. Download `Qwen/Qwen3-4B` separately into the local Hugging Face cache (about 8 GB in this setup). The base model is published under Apache-2.0; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the [official model card](https://huggingface.co/Qwen/Qwen3-4B).
+
+The adapter weights use Git LFS. Install Git LFS before cloning and fetch LFS objects after cloning. Account storage and transfer quotas depend on the GitHub plan.
 
 ## Requirements
 
-- Windows 10/11 (the scripts and examples are currently Windows-oriented)
-- Slay the Spire 2 installed
-- Python 3.11
-- .NET 9 SDK to rebuild the included game mods
-- STS2 MCP enabled in the game; the Python client expects `http://127.0.0.1:15526` by default
-- An Ollama-compatible strategic inference endpoint. Defaults: `http://127.0.0.1:11434` and model `qwen3:4b`; the included LoRA server can be used instead when you have an adapter
+- Windows 10/11 and Python 3.11
+- Slay the Spire 2 with the STS2 MCP mod enabled
+- The included `PunchOffInstantFix` helper mod for the training setup used by this project
+- CUDA-capable PyTorch for PPO GPU use and LoRA inference/training
+- .NET 9 SDK only if rebuilding the helper mod
 
 ## Setup
 
-Clone the repository, create a Python environment, and install the PPO/runtime dependencies:
+Install Git LFS, clone the repository, create the Python environments, and install their dependencies. These environment folders are machine-local and ignored by Git; the commands below create them after cloning.
 
 ```powershell
-git clone <repository-url>
-cd <repository-directory>
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+git lfs install
+git clone https://github.com/nbssqvq/STS2-Hierarchical-AI.git
+cd STS2-Hierarchical-AI
+git lfs pull
+
+py -3.11 -m venv env1
+.\env1\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-```
 
-Install STS2 MCP and the local training helper mod into the game's `mods` directory. The repository includes their source and the current release DLLs. To rebuild them, set the game directory and build against the assemblies shipped with your own game installation:
-
-```powershell
-$env:STS2_GAME_DIR = "C:\path\to\Slay the Spire 2"
-$gameData = Join-Path $env:STS2_GAME_DIR "data_sts2_windows_x86_64"
-$mods = Join-Path $env:STS2_GAME_DIR "mods"
-dotnet build .\mods\McpBuild\STS2_MCP.csproj -c Release -p:GameData="$gameData"
-dotnet build .\mods\PunchOffInstantFix\PunchOffInstantFix.csproj -c Release -p:GameData="$gameData"
-New-Item -ItemType Directory -Force $mods | Out-Null
-Copy-Item .\mods\McpBuild\bin\Release\net9.0\STS2_MCP.dll $mods
-Copy-Item .\mods\McpBuild\mod_manifest.json (Join-Path $mods "STS2_MCP.json")
-Copy-Item .\mods\PunchOffInstantFix\bin\Release\net9.0\PunchOffInstantFix.dll $mods
-Copy-Item .\mods\PunchOffInstantFix\PunchOffInstantFix.json $mods
-```
-
-Enable the mods in the game settings and start the game before running an agent. The MCP source is based on [Gennadiyev/STS2MCP](https://github.com/Gennadiyev/STS2MCP); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for its copyright, MIT license, and the local changes made to it.
-
-For strategic LoRA fine-tuning, use a separate environment so the training dependencies do not conflict with the game runtime environment:
-
-```powershell
-py -3.11 -m venv .venv-llm
-.\.venv-llm\Scripts\Activate.ps1
+deactivate
+py -3.11 -m venv env_llm
+.\env_llm\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements-llm.txt
 ```
 
-## Configure strategic inference
+`git clone` does not create Python environments automatically. Run `py -m venv` and `pip install` as above. Training scripts create their output folders when needed; the Qwen base-model cache must be downloaded separately.
 
-For a base Ollama model, make sure the service and model are available, then set the endpoint and model in the same PowerShell window used to run the agent:
+### Install the game mods
 
-```powershell
-$env:STS2_STRATEGIC_URL = "http://127.0.0.1:11434"
-$env:STS2_STRATEGIC_MODEL = "qwen3:4b"
-```
-
-For the project's Ollama-compatible LoRA server, start it with an adapter directory you have prepared:
+The repository includes prebuilt mod DLLs and manifests. Copy them into the game's `mods` directory; this does not require rebuilding the MCP mod.
 
 ```powershell
-python lora_strategic_server.py --adapter "<path-to-adapter>" --host 127.0.0.1 --port 11435 --model-name sts2-qwen3-4b-lora
+$gameDir = "D:\Steam\steamapps\common\Slay the Spire 2"
+$modsDir = Join-Path $gameDir "mods"
+New-Item -ItemType Directory -Force $modsDir | Out-Null
+Copy-Item .\mods\McpBuild\bin\Release\net9.0\STS2_MCP.dll $modsDir
+Copy-Item .\mods\McpBuild\mod_manifest.json (Join-Path $modsDir "STS2_MCP.json")
+Copy-Item .\mods\PunchOffInstantFix\bin\Release\net9.0\PunchOffInstantFix.dll $modsDir
+Copy-Item .\mods\PunchOffInstantFix\PunchOffInstantFix.json $modsDir
 ```
 
-Then configure the agent process to use that server:
+Enable both mods in the game and start the client. STS2 MCP is based on [Gennadiyev/STS2MCP](https://github.com/Gennadiyev/STS2MCP), with local changes in the distributed binary. Its copyright and MIT license are preserved in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+To rebuild the project-owned helper mod against your installation, set `GameData` to the directory containing `sts2.dll`, `GodotSharp.dll`, and `0Harmony.dll`:
+
+```powershell
+$gameData = Join-Path $gameDir "data_sts2_windows_x86_64"
+dotnet build .\mods\PunchOffInstantFix\PunchOffInstantFix.csproj -c Release -p:GameData="$gameData"
+```
+
+## Strategic inference
+
+To use the included LoRA server, download the base model into the cache used by the server. Run these commands from the repository root:
+
+```powershell
+$env:HF_HOME = Join-Path $PWD "models\hf_cache"
+env_llm\Scripts\python.exe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-4B')"
+env_llm\Scripts\python.exe -m sts2_rl.strategy.lora_strategic_server --adapter artifacts/models/qwen3_4b_lora --host 127.0.0.1 --port 11435 --model-name sts2-qwen3-4b-lora
+```
+
+In the PowerShell window running the agent, point the client to the server:
 
 ```powershell
 $env:STS2_STRATEGIC_URL = "http://127.0.0.1:11435"
 $env:STS2_STRATEGIC_MODEL = "sts2-qwen3-4b-lora"
 ```
 
-The strategic client permits fallback by default. Set `STS2_STRATEGIC_REQUIRED=1` and `STS2_STRATEGIC_ALLOW_FALLBACK=0` when you need training to fail instead of using fallback if the configured model is unavailable.
+The included `run_lora_server_watchdog.cmd` starts the same server from `env_llm`. An Ollama-compatible endpoint can be used instead by setting `STS2_STRATEGIC_URL` and `STS2_STRATEGIC_MODEL` to that service. To prevent silent fallback when the configured model is unavailable, set `STS2_STRATEGIC_REQUIRED=1` and `STS2_STRATEGIC_ALLOW_FALLBACK=0`.
 
-## Train and evaluate PPO
+## Train and evaluate
 
-With the game, MCP mod, and strategic service ready, start a fresh PPO run:
-
-```powershell
-python train.py --total-timesteps 20000 --n-envs 1 --model-path models/my-run/model --log-dir logs/my-run --save-freq 10000 --eval-episodes 2
-```
-
-Resume from a checkpoint and train for additional environment steps:
+Run package entry points from the repository root, using `env1`:
 
 ```powershell
-python train.py --continue-from "models/<checkpoint>.zip" --total-timesteps 100000 --model-path models/my-resume/model --log-dir logs/my-resume --save-freq 10000 --eval-episodes 2
+env1\Scripts\python.exe -m sts2_rl.training.train --total-timesteps 20000 --n-envs 1 --model-path logs/my-run/model --log-dir logs/my-run --save-freq 10000 --eval-episodes 2
+env1\Scripts\python.exe -m sts2_rl.training.train --continue-from artifacts/models/ppo_800k/final_model.zip --total-timesteps 100000 --model-path logs/my-resume/model --log-dir logs/my-resume --save-freq 10000 --eval-episodes 2
+env1\Scripts\python.exe -m sts2_rl.evaluation.evaluate_model --model-path artifacts/models/ppo_800k/final_model.zip --episodes 10
+env1\Scripts\python.exe -m sts2_rl.runtime.run_single_game --model-path artifacts/models/ppo_800k/final_model.zip --episodes 1
 ```
 
-Evaluate a saved model or run one game:
+The checkpoint ZIP and matching `.mappings.json` are a pair. Keep both together when copying a model or resuming training. For command options, run a module with `--help`, for example `python -m sts2_rl.training.training_watchdog --help`.
 
-```powershell
-python evaluate_model.py --model-path "models/<model>.zip" --episodes 10
-python run_single_game.py --model-path "models/<model>.zip" --episodes 1
-```
+LoRA training and strategic-data tools are in `sts2_rl.training`; PPO and LoRA evaluation and dataset analysis are in `sts2_rl.evaluation`. Run these commands from the repository root so relative data and log paths resolve consistently. Collected datasets, full LoRA training checkpoints, TensorBoard logs, and the base-model cache remain local and are ignored by Git.
 
-`training_watchdog.py` can supervise longer runs and restart the game/training worker at configured intervals. Run `python training_watchdog.py --help` for its options. Model weights, training logs, mappings, and datasets are intentionally excluded from Git.
+## License
 
-## Strategic data and LoRA workflow
-
-The repository includes scripts for collecting run trajectories, analyzing and filtering decisions, splitting datasets, and training/evaluating a strategic LoRA adapter. The collected datasets and adapter are local training artifacts. Check each script's `--help` output for the required dataset and output paths:
-
-```powershell
-python run_single_game.py --help
-python analyze_collection.py --help
-python split_strategic_dataset.py --help
-python train_strategic_lora.py --help
-python evaluate_strategic_lora.py --help
-```
-
-## Licensing
-
-This repository does not yet declare a project-wide license. The MIT license in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) applies to the upstream STS2 MCP code and does not license this project's own code.
+This repository does not yet declare a project-wide license. The MIT notice applies to STS2 MCP, and Apache-2.0 applies to the Qwen3-4B base model. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

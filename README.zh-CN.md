@@ -1,128 +1,124 @@
 # 杀戮尖塔2分层智能体
 [English](README.md)
 
-这是一个用于**《杀戮尖塔2》**的分层智能体实验项目：战斗中由 MaskablePPO 负责出牌、选择目标、使用药水和结束回合；地图、商店、事件、篝火、奖励等战略决策由兼容 Qwen 的大模型负责。游戏状态和动作通过 [STS2 MCP](https://github.com/Gennadiyev/STS2MCP) 暴露的本地 HTTP API 传递。
+这是一个用于**《杀戮尖塔2》**的分层智能体实验项目：战斗中由 MaskablePPO 选择出牌、目标、药水和结束回合动作；地图、商店、事件、篝火和奖励选择由兼容 Qwen 的战略智能体处理。游戏通过 [STS2 MCP](https://github.com/Gennadiyev/STS2MCP) 暴露的本地 HTTP API 控制。
 
-本项目仍是研究原型。预期目标是让 PPO 专注战斗战术，让战略模型处理更长远的路线和资源选择，并利用采集数据持续改进；这属于计划目标，不代表已经能够稳定通关。
+本项目仍是研究原型。PPO 与战略智能体的协作链路已经集成，但尚不能保证稳定通关。
 
-## 项目概述
+## 项目结构
 
-- **战斗策略：** MaskablePPO 处理出牌、目标、药水和结束回合。当前特征 schema 为 4，共 216 维，策略网络为 128×128；动态卡牌、状态和实体映射与 checkpoint 配套保存。
-- **战略策略：** 兼容 Qwen 3 4B 的服务处理非战斗决策及与当前战斗相关的选择界面，并通过规则保护和确定性 fallback 校验动作。
-- **统一流程：** 训练与单局评估共用环境和 `GameRunner`，由同一套逻辑推进非战斗界面。
-- **学习工具：** 项目提供 PPO 训练、断点迁移、评估、战略轨迹采集、数据筛选以及可选的 LoRA 微调脚本。
+```text
+sts2_rl/
+  runtime/       环境、特征、动作掩码、MCP 客户端、PPO 适配器、单局控制器
+  strategy/      战略策略、路线规则、Ollama 客户端、LoRA 服务
+  training/      PPO/LoRA 训练和数据集工具
+  evaluation/    PPO/LoRA 评估及轨迹分析
+  config.py      项目根目录和默认模型路径
+tools/           手动 HTTP 交互工具
+mods/            可安装到游戏中的 STS2 MCP 和训练辅助 Mod
+artifacts/models/整理后的 800k PPO checkpoint 和 Qwen 战略 LoRA 推理包
+logs/、models/   本机日志、数据集、模型缓存和训练断点；由 Git 忽略
+```
 
-## 当前阶段
+项目根目录的 `.cs` 文件只作为本地参考源码，不提交到 Git。修改过的 MCP 发布 DLL 和 manifest 保存在 `mods/McpBuild`；公开仓库不包含重建该 DLL 所需的根目录 MCP 源码。独立的 `PunchOffInstantFix` 辅助 Mod 保留源码和发布文件。
 
-PPO 与战略大模型的协作链路、PPO/LoRA 训练和评估工作流已经集成。本地 PPO 训练约达到 80 万环境步；对应 checkpoint、LoRA adapter、数据集和日志不包含在仓库中。目前仍在评估决策质量、改善训练数据并提高长时间运行稳定性，尚不能保证稳定通关或达到固定胜率。
+## 当前阶段与模型文件
+
+PPO 与战略智能体的协作流程已经集成。仓库包含目前最新的 **800,902 环境步** PPO checkpoint；正确读取特征还需要与 ZIP 同目录的映射 JSON。仓库也包含 Qwen3-4B LoRA 推理所需的 adapter 和 tokenizer 文件，但不含优化器和 Trainer 状态，因此该推理包本身不能用于恢复 LoRA 微调。
+
+Qwen 基础模型不包含在仓库中。本地需要另行下载 `Qwen/Qwen3-4B` 到 Hugging Face 缓存；在当前环境约占 8 GB。基础模型采用 Apache-2.0 许可证，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和[官方模型卡](https://huggingface.co/Qwen/Qwen3-4B)。
+
+LoRA 权重通过 Git LFS 管理。克隆前安装 Git LFS，克隆后执行 `git lfs pull`。GitHub 账户的 LFS 存储和流量额度取决于套餐。
 
 ## 环境要求
 
-- Windows 10/11（当前脚本和命令示例以 Windows 为主）
-- 已安装《杀戮尖塔2》
-- Python 3.11
-- .NET 9 SDK（重新构建仓库内 Mod 时需要）
-- 在游戏中启用 STS2 MCP；Python 客户端默认连接 `http://127.0.0.1:15526`
-- 一个兼容 Ollama API 的战略推理服务。默认地址为 `http://127.0.0.1:11434`，默认模型为 `qwen3:4b`；有 LoRA adapter 时也可以使用仓库内的 LoRA 服务
+- Windows 10/11、Python 3.11
+- 已安装《杀戮尖塔2》，并启用 STS2 MCP Mod
+- 本项目训练配置使用的 `PunchOffInstantFix` 辅助 Mod
+- PPO GPU 训练和 LoRA 推理/训练需要支持 CUDA 的 PyTorch
+- 只有重新构建辅助 Mod 时才需要 .NET 9 SDK
 
 ## 安装
 
-克隆仓库并安装 PPO 运行依赖：
+安装 Git LFS 后克隆仓库，创建 Python 虚拟环境并安装依赖。虚拟环境只属于本机，不上传到 Git；下面的命令会在克隆后创建它们。
 
 ```powershell
-git clone <repository-url>
-cd <repository-directory>
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+git lfs install
+git clone https://github.com/nbssqvq/STS2-Hierarchical-AI.git
+cd STS2-Hierarchical-AI
+git lfs pull
+
+py -3.11 -m venv env1
+.\env1\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-```
 
-将 STS2 MCP 和本项目的训练辅助 Mod 安装到游戏的 `mods` 目录。仓库保留了它们的源码和当前编译出的发布 DLL。要针对自己安装的游戏版本重新构建，请设置游戏目录并引用该游戏自带的程序集：
-
-```powershell
-$env:STS2_GAME_DIR = "C:\path\to\Slay the Spire 2"
-$gameData = Join-Path $env:STS2_GAME_DIR "data_sts2_windows_x86_64"
-$mods = Join-Path $env:STS2_GAME_DIR "mods"
-dotnet build .\mods\McpBuild\STS2_MCP.csproj -c Release -p:GameData="$gameData"
-dotnet build .\mods\PunchOffInstantFix\PunchOffInstantFix.csproj -c Release -p:GameData="$gameData"
-New-Item -ItemType Directory -Force $mods | Out-Null
-Copy-Item .\mods\McpBuild\bin\Release\net9.0\STS2_MCP.dll $mods
-Copy-Item .\mods\McpBuild\mod_manifest.json (Join-Path $mods "STS2_MCP.json")
-Copy-Item .\mods\PunchOffInstantFix\bin\Release\net9.0\PunchOffInstantFix.dll $mods
-Copy-Item .\mods\PunchOffInstantFix\PunchOffInstantFix.json $mods
-```
-
-在游戏设置中启用 Mod 并启动游戏，然后再运行智能体。MCP 源码基于 [Gennadiyev/STS2MCP](https://github.com/Gennadiyev/STS2MCP)，其版权、MIT 许可证和本地改动记录见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
-
-训练战略 LoRA 时建议使用独立环境，以免大型训练依赖与游戏运行环境冲突：
-
-```powershell
-py -3.11 -m venv .venv-llm
-.\.venv-llm\Scripts\Activate.ps1
+deactivate
+py -3.11 -m venv env_llm
+.\env_llm\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements-llm.txt
 ```
 
-## 配置战略推理服务
+`git clone` 不会自动创建 Python 环境；需要运行 `py -m venv` 和 `pip install`。训练脚本会在运行时创建输出目录；Qwen 基础模型缓存需要单独下载。
 
-使用基础 Ollama 模型时，先确保服务和模型可用，再在运行程序的同一个 PowerShell 窗口设置地址和模型：
+### 安装游戏 Mod
 
-```powershell
-$env:STS2_STRATEGIC_URL = "http://127.0.0.1:11434"
-$env:STS2_STRATEGIC_MODEL = "qwen3:4b"
-```
-
-使用本项目的 Ollama 兼容 LoRA 服务时，将 adapter 路径替换为本地已有目录：
+仓库内保留了预编译的 Mod DLL 和 manifest。将它们复制到游戏的 `mods` 目录即可，不需要重新构建 MCP Mod。
 
 ```powershell
-python lora_strategic_server.py --adapter "<adapter目录>" --host 127.0.0.1 --port 11435 --model-name sts2-qwen3-4b-lora
+$gameDir = "D:\Steam\steamapps\common\Slay the Spire 2"
+$modsDir = Join-Path $gameDir "mods"
+New-Item -ItemType Directory -Force $modsDir | Out-Null
+Copy-Item .\mods\McpBuild\bin\Release\net9.0\STS2_MCP.dll $modsDir
+Copy-Item .\mods\McpBuild\mod_manifest.json (Join-Path $modsDir "STS2_MCP.json")
+Copy-Item .\mods\PunchOffInstantFix\bin\Release\net9.0\PunchOffInstantFix.dll $modsDir
+Copy-Item .\mods\PunchOffInstantFix\PunchOffInstantFix.json $modsDir
 ```
 
-然后让智能体连接该服务：
+在游戏中启用两个 Mod 并启动客户端。MCP 基于开源项目 [Gennadiyev/STS2MCP](https://github.com/Gennadiyev/STS2MCP)，发布 DLL 包含本地修改；版权和 MIT 许可证保留在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中。
+
+如需针对本机游戏版本重新构建项目自有的辅助 Mod，将 `GameData` 指向含有 `sts2.dll`、`GodotSharp.dll` 和 `0Harmony.dll` 的目录：
+
+```powershell
+$gameData = Join-Path $gameDir "data_sts2_windows_x86_64"
+dotnet build .\mods\PunchOffInstantFix\PunchOffInstantFix.csproj -c Release -p:GameData="$gameData"
+```
+
+## 战略推理
+
+使用仓库中的 LoRA 服务前，先将基础模型下载到服务使用的本地缓存。在项目根目录运行：
+
+```powershell
+$env:HF_HOME = Join-Path $PWD "models\hf_cache"
+env_llm\Scripts\python.exe -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Qwen/Qwen3-4B')"
+env_llm\Scripts\python.exe -m sts2_rl.strategy.lora_strategic_server --adapter artifacts/models/qwen3_4b_lora --host 127.0.0.1 --port 11435 --model-name sts2-qwen3-4b-lora
+```
+
+在运行智能体的 PowerShell 窗口中指定服务：
 
 ```powershell
 $env:STS2_STRATEGIC_URL = "http://127.0.0.1:11435"
 $env:STS2_STRATEGIC_MODEL = "sts2-qwen3-4b-lora"
 ```
 
-默认情况下战略客户端允许 fallback。若续训时不允许服务故障后转为 fallback，请同时设置 `STS2_STRATEGIC_REQUIRED=1` 和 `STS2_STRATEGIC_ALLOW_FALLBACK=0`。
+`run_lora_server_watchdog.cmd` 也会从 `env_llm` 启动相同服务。也可以改用 Ollama 兼容服务并设置 `STS2_STRATEGIC_URL`、`STS2_STRATEGIC_MODEL`。如果服务不可用时不允许静默切换到 fallback，同时设置 `STS2_STRATEGIC_REQUIRED=1` 和 `STS2_STRATEGIC_ALLOW_FALLBACK=0`。
 
-## PPO 训练与评估
+## 训练与评估
 
-准备好游戏、MCP Mod 和战略服务后，启动新的 PPO 训练：
-
-```powershell
-python train.py --total-timesteps 20000 --n-envs 1 --model-path models/my-run/model --log-dir logs/my-run --save-freq 10000 --eval-episodes 2
-```
-
-从 checkpoint 继续训练额外环境步：
+在项目根目录使用 `env1` 运行包入口：
 
 ```powershell
-python train.py --continue-from "models/<checkpoint>.zip" --total-timesteps 100000 --model-path models/my-resume/model --log-dir logs/my-resume --save-freq 10000 --eval-episodes 2
+env1\Scripts\python.exe -m sts2_rl.training.train --total-timesteps 20000 --n-envs 1 --model-path logs/my-run/model --log-dir logs/my-run --save-freq 10000 --eval-episodes 2
+env1\Scripts\python.exe -m sts2_rl.training.train --continue-from artifacts/models/ppo_800k/final_model.zip --total-timesteps 100000 --model-path logs/my-resume/model --log-dir logs/my-resume --save-freq 10000 --eval-episodes 2
+env1\Scripts\python.exe -m sts2_rl.evaluation.evaluate_model --model-path artifacts/models/ppo_800k/final_model.zip --episodes 10
+env1\Scripts\python.exe -m sts2_rl.runtime.run_single_game --model-path artifacts/models/ppo_800k/final_model.zip --episodes 1
 ```
 
-评估模型或运行一局：
+模型 ZIP 和对应的 `.mappings.json` 必须配套保留。查看训练 watchdog 等程序的参数，可运行 `python -m sts2_rl.training.training_watchdog --help`。
 
-```powershell
-python evaluate_model.py --model-path "models/<model>.zip" --episodes 10
-python run_single_game.py --model-path "models/<model>.zip" --episodes 1
-```
-
-长时间训练可以由 `training_watchdog.py` 监督，并按配置重启游戏和训练工作进程，参数见 `python training_watchdog.py --help`。模型权重、训练日志、映射文件和数据集均由 Git 忽略。
-
-## 战略数据与 LoRA
-
-仓库包含游戏轨迹采集、决策分析与筛选、数据集拆分、战略 LoRA 训练和评估脚本。采集数据集和 adapter 属于本地训练产物，不提交到 Git。脚本参数和输入路径见：
-
-```powershell
-python run_single_game.py --help
-python analyze_collection.py --help
-python split_strategic_dataset.py --help
-python train_strategic_lora.py --help
-python evaluate_strategic_lora.py --help
-```
+LoRA 训练和战略数据工具位于 `sts2_rl.training`；PPO/LoRA 评估和轨迹分析位于 `sts2_rl.evaluation`。请从项目根目录运行这些模块，以保证相对数据路径和日志路径一致。采集数据集、完整 LoRA 训练断点、TensorBoard 日志和基础模型缓存均保留在本机，不提交到 Git。
 
 ## 许可证
 
-本仓库尚未为项目自身选择统一许可证。[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 中的 MIT 许可证适用于上游 STS2 MCP 代码，不代表本项目自身代码也采用 MIT 许可证。
+本仓库尚未为项目自身指定统一许可证。MIT 许可证适用于 STS2 MCP；Apache-2.0 适用于 Qwen3-4B 基础模型。详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
