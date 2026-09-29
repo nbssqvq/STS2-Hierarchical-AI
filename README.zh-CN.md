@@ -40,7 +40,7 @@ LoRA 权重通过 Git LFS 管理。克隆前安装 Git LFS，克隆后执行 `gi
 
 ## 安装
 
-安装 Git LFS 后克隆仓库，创建 Python 虚拟环境并安装依赖。虚拟环境只属于本机，不上传到 Git；下面的命令会在克隆后创建它们。
+安装 Git LFS 后克隆仓库，创建 Python 虚拟环境并安装依赖。下面的命令会在克隆后创建它们。
 
 ```powershell
 git lfs install
