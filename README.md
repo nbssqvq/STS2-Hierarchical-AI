@@ -39,7 +39,7 @@ The adapter weights use Git LFS. Install Git LFS before cloning and fetch LFS ob
 
 ## Setup
 
-Install Git LFS, clone the repository, create the Python environments, and install their dependencies. These environment folders are machine-local and ignored by Git; the commands below create them after cloning.
+Install Git LFS, clone the repository, create the Python environments, and install their dependencies. The commands below create them after cloning.
 
 ```powershell
 git lfs install
