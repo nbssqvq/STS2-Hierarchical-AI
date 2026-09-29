@@ -1,0 +1,64 @@
+# Python bytecode and local environments
+__pycache__/
+*.py[cod]
+*.pyd
+/.venv/
+/venv/
+/env*/
+
+# Local credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+*.save
+*.lnk
+*.url
+
+# Game, training, and evaluation artifacts
+/.checkpoints/
+/.checkpoint/
+/checkpoints/
+/logs/
+/models/
+/outputs/
+/runs/
+*.mappings.json
+*.log
+*.tmp
+*.out.tfevents.*
+events.out.tfevents.*
+episode.monitor.csv
+progress.csv
+
+# Ignore C# files by default. Keep the MCP source and the release helper mod.
+*.cs
+!/McpMod*.cs
+!/mods/McpBuild/McpMod.Multiplayer*.cs
+!/mods/PunchOffInstantFix/Patch.cs
+/mods/PunchOffInstantFix/Probe.cs
+/mods/PunchOffInstantFix/probe-request.txt
+
+# Keep only the release DLLs intended for the game mods directory.
+*.dll
+*.pdb
+/mods/McpBuild/bin/Release/net9.0/*
+!/mods/McpBuild/bin/Release/net9.0/STS2_MCP.dll
+/mods/PunchOffInstantFix/bin/Release/net9.0/*
+!/mods/PunchOffInstantFix/bin/Release/net9.0/PunchOffInstantFix.dll
+**/obj/
+
+# Game decompilation and inspection output
+/tools/inspect_game/
+*.il.txt
+
+# Project-local instructions and GitHub settings excluded by request
+/.github/
+/AGENTS.md
+/agents.md
+
+# IDE and OS files
+.idea/
+.vs/
+.vscode/
+Thumbs.db
+Desktop.ini

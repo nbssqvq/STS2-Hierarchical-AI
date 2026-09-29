@@ -1,0 +1,10 @@
+{
+  "id": "PunchOffInstantFix",
+  "name": "PunchOff Instant Mode Fix",
+  "author": "Local training fix",
+  "description": "Enables and persists Instant Mode after startup, preserves PunchOff asynchronous waits, and exposes a startup marker for the training watchdog.",
+  "version": "1.1.1",
+  "has_pck": false,
+  "has_dll": true,
+  "affects_gameplay": false
+}
