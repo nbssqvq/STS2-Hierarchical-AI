@@ -19,8 +19,7 @@ mods/            Deployable STS2 MCP and training helper mods
 artifacts/models/Curated 800k PPO checkpoint and Qwen strategic LoRA inference bundle
 logs/, models/   Local logs, datasets, model caches, and training checkpoints; ignored by Git
 ```
-
-The repository-root `.cs` files are local reference sources and are deliberately excluded from Git. The modified MCP release DLL and manifest are retained under `mods/McpBuild`; the public checkout does not contain the root MCP source needed to rebuild that binary. The separate `PunchOffInstantFix` helper mod retains its source and release files.
+The modified MCP release DLL and manifest are retained under `mods/McpBuild`; the public checkout does not contain the root MCP source needed to rebuild that binary. The separate `PunchOffInstantFix` helper mod retains its source and release files.
 
 ## Current stage and included models
 

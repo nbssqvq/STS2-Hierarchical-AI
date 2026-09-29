@@ -20,7 +20,7 @@ artifacts/models/整理后的 800k PPO checkpoint 和 Qwen 战略 LoRA 推理包
 logs/、models/   本机日志、数据集、模型缓存和训练断点；由 Git 忽略
 ```
 
-项目根目录的 `.cs` 文件只作为本地参考源码，不提交到 Git。修改过的 MCP 发布 DLL 和 manifest 保存在 `mods/McpBuild`；公开仓库不包含重建该 DLL 所需的根目录 MCP 源码。独立的 `PunchOffInstantFix` 辅助 Mod 保留源码和发布文件。
+修改过的 MCP 发布 DLL 和 manifest 保存在 `mods/McpBuild`；公开仓库不包含重建该 DLL 所需的根目录 MCP 源码。独立的 `PunchOffInstantFix` 辅助 Mod 保留源码和发布文件。
 
 ## 当前阶段与模型文件
 
