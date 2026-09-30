@@ -44,7 +44,7 @@ class RewardCalculator:
         """Initialize the fixed terminal and act-clear reward terms."""
         self.victory_bonus = 1500.0
         self.loss_penalty = 300.0
-        self.act_clear_bonus = 60.0
+        self.act_clear_bonus = 300.0
 
     @staticmethod
     def act_clear_count(prev: Dict, curr: Dict) -> int:
